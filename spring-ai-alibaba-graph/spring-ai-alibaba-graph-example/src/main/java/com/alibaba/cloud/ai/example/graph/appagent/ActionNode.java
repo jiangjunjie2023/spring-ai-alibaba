@@ -50,12 +50,13 @@ public class ActionNode implements NodeAction {
 		}
 		else if (response.getAction().equals("xuban_check")) {
 			Map<String, Object> params = response.getParams();
-			String schoolId = (String) params.get("schoolId");
+			// agent返回了Double类型
+			Double schoolId = (Double) params.get("schoolId");
 			String teacherCode = (String) params.get("teacherCode");
 			String classCode = (String) params.get("classCode");
 			logger.info("调用XubanCheckTool, 参数: teacherCode={}, schoolId={}, classCode={}", teacherCode, schoolId,
 					classCode);
-			observation = XubanCheckTool.xubanCheck(teacherCode, schoolId, classCode);
+			observation = XubanCheckTool.xubanCheck(teacherCode, schoolId.intValue(), classCode);
 		}
 		else if (response.getAction().equals("teacher_info")) {
 			Map<String, Object> params = response.getParams();

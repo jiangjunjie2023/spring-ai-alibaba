@@ -6,7 +6,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -26,26 +25,23 @@ public class AgentNode implements NodeAction {
 
 	private final SystemPromptTemplate systemPromptTemplate;
 
-	private static final ObjectMapper objectMapper = new ObjectMapper();
-
 	private static final String AGENT_PROMPT_2 = """
 			用户任务: {input}
 			解决该任务可以使用的工具：
 			{tools}
 
-			用户需经过多步工具调用来完成任务。要求你辅助用户选出当前步骤需要调用的工具，遵循以下过程决策：
-			问题: 待回答的输入问题
+			用户需经过多步工具调用来完成任务。要求你辅助用户选出当前步骤需要调用的工具，用户会根据操作指引完成工具的调用，并将操作结果再放入已知数据。
+			已知数据：{currentContext}
+
+			遵循以下过程决策：
+			观察: 观察已知数据，来进入下一轮思考
 			思考: 考虑需要执行的操作
 			操作: 使用JSON明确告知用户下一步行动，有效的action值为："finalAnswer" 或者是 指定的工具名。
 			1. 当思考结果是要输出结果时，输出action为finalAnswer，示例如下：
 			{finishJson}
 			2. 当思考结果是要调用工具时，输出要执行的工具，示例如下：
 			{actionJson}
-			JSON块仅包含内容，不要```json来包裹。
-
-			用户会根据操作指引完成工具的调用，并将操作结果返回。
-			已知数据：{currentContext}
-			观察: 观察用户执行完操作的结果，来进入下一轮思考
+			JSON块仅包含内容，不要```json来包裹。JSON中的value为数字的用Integer格式返回。
 
 			开始！请记住每一轮都要包含思考、操作和观察三个部分，输出下一步行动描述时仅包含JSON内容，便于解析。严禁杜撰数据。
 			""";

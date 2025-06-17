@@ -90,7 +90,7 @@ public class CompiledGraph {
 
 	private final ProcessedNodesEdgesAndConfig processedData;
 
-	private int maxIterations = 5;
+	private int maxIterations = 25;
 
 	/**
 	 * The Compile config.
