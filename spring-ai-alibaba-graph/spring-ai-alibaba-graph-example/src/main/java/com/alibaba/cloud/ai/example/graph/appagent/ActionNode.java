@@ -2,11 +2,15 @@ package com.alibaba.cloud.ai.example.graph.appagent;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
+import com.google.gson.Gson;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import lombok.Data;
 
 // 负责根据 agent_outcome 字段调用不同工具
 public class ActionNode implements NodeAction {
@@ -21,33 +25,49 @@ public class ActionNode implements NodeAction {
 
 		String observation;
 
-		// 这里假设 agentOutcome 以"TOOL:xxx|参数1=...|参数2=..."格式传递
-		if (agentOutcome.startsWith("TOOL:student_info")) {
+		AgentResponse response = new Gson().fromJson(agentOutcome, AgentResponse.class);
+		if (response == null || StringUtils.isEmpty(response.getAction())) {
+			logger.info("未识别的结果，直接返回agentOutcome");
+			observation = "[TOOL_RESULT] " + agentOutcome;
+
+			logger.info("ActionNode工具返回: {}", observation);
+
+			Map<String, Object> updated = new HashMap<>();
+			updated.put("observation", observation);
+			logger.info("ActionNode返回的updated: {}", updated);
+			return updated;
+		}
+
+		if (response.getAction().equals("student_info")) {
 			// 解析参数
-			String[] parts = agentOutcome.split("\\|");
-			String schoolId = getValue(parts, "schoolId");
-			String studentCode = getValue(parts, "studentCode");
-			String features = getValue(parts, "features");
+			Map<String, Object> params = response.getParams();
+			String schoolId = (String) params.get("schoolId");
+			String studentCode = (String) params.get("studentCode");
+			String features = (String) params.get("features");
 			logger.info("调用StudentInfoTool, 参数: schoolId={}, studentCode={}, features={}", schoolId, studentCode,
 					features);
 			observation = StudentInfoTool.getStudentInfo(schoolId, studentCode, features);
 		}
-		else if (agentOutcome.startsWith("TOOL:xuban_check")) {
-			String[] parts = agentOutcome.split("\\|");
-			String teacherCode = getValue(parts, "teacherCode");
-			String schoolId = getValue(parts, "schoolId");
-			String classCode = getValue(parts, "classCode");
+		else if (response.getAction().equals("xuban_check")) {
+			Map<String, Object> params = response.getParams();
+			String schoolId = (String) params.get("schoolId");
+			String teacherCode = (String) params.get("teacherCode");
+			String classCode = (String) params.get("classCode");
 			logger.info("调用XubanCheckTool, 参数: teacherCode={}, schoolId={}, classCode={}", teacherCode, schoolId,
 					classCode);
 			observation = XubanCheckTool.xubanCheck(teacherCode, schoolId, classCode);
 		}
-		else if (agentOutcome.startsWith("TOOL:teacher_info")) {
-			String[] parts = agentOutcome.split("\\|");
-			String email = getValue(parts, "email");
-			String e2e = getValue(parts, "e2e");
-			String e2mf = getValue(parts, "e2mf");
+		else if (response.getAction().equals("teacher_info")) {
+			Map<String, Object> params = response.getParams();
+			String email = (String) params.get("email");
+			String e2e = (String) params.get("e2e");
+			String e2mf = (String) params.get("e2mf");
 			logger.info("调用TeacherInfoTool, 参数: email={}, e2e={}, e2mf={}", email, e2e, e2mf);
 			observation = TeacherInfoTool.queryTeacherIdentity(email, e2e, e2mf);
+		}
+		else if (response.getAction().equals("finalAnswer")) {
+			logger.info("已完成全部调用，结果={}", response.getOutput());
+			observation = response.getOutput();
 		}
 		else {
 			logger.info("未识别的工具调用，直接返回agentOutcome");
@@ -62,13 +82,17 @@ public class ActionNode implements NodeAction {
 		return updated;
 	}
 
-	private String getValue(String[] parts, String key) {
-		for (String part : parts) {
-			if (part.trim().startsWith(key + "=")) {
-				return part.trim().substring((key + "=").length());
-			}
-		}
-		return "";
+	@Data
+	public static class AgentResponse {
+
+		private String thought;
+
+		private String action;
+
+		private String output;
+
+		private Map<String, Object> params;
+
 	}
 
 }

@@ -28,7 +28,7 @@ public class AppAgentController {
 
 	@GetMapping("/chat")
 	public String chat(String input) throws GraphStateException {
-		input += "; 已知该老师email=yueqianqian@xdf.cn，e2e=894DC59F52530720C11F2140AFC8F701，e2mf=f9019ccb148e4e98acf71fbcc09b4958";
+		input += "; 已知该老师email=zhouchanghua@xdf.cn，e2e=21D9AAB155F13810995FD41F3088F4A1，e2mf=d97fad3264654f8489388c23b60d74d4";
 		logger.info("收到请求，input={}", input);
 		Optional<OverAllState> result = compiledGraph.invoke(Map.of("input", input));
 		String output = result.map(state -> state.value("final_output").orElse("无结果").toString()).orElse("无结果");
