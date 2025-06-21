@@ -6,9 +6,12 @@ import com.alibaba.cloud.ai.graph.StateGraph;
 import com.alibaba.cloud.ai.graph.action.AsyncEdgeAction;
 import com.alibaba.cloud.ai.graph.action.AsyncNodeAction;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
+import com.alibaba.cloud.ai.graph.state.strategy.AppendStrategy;
 import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,8 +24,8 @@ import static com.alibaba.cloud.ai.graph.StateGraph.START;
 public class AppAgentWorkflowConfig {
 
 	@Bean("appAgentGraph")
-	public StateGraph appAgentGraph(ChatModel chatModel) throws GraphStateException {
-		ChatClient chatClient = ChatClient.builder(chatModel).build();
+	public StateGraph appAgentGraph(@Qualifier("myChatModel") ChatModel chatModel) throws GraphStateException {
+		ChatClient chatClient = ChatClient.builder(chatModel).defaultAdvisors(new SimpleLoggerAdvisor()).build();
 
 		OverAllStateFactory stateFactory = () -> {
 			OverAllState state = new OverAllState();
@@ -30,7 +33,8 @@ public class AppAgentWorkflowConfig {
 			state.registerKeyAndStrategy("agent_outcome", new ReplaceStrategy());
 			state.registerKeyAndStrategy("is_finish", new ReplaceStrategy());
 			state.registerKeyAndStrategy("chat_history", new ReplaceStrategy());
-			state.registerKeyAndStrategy("observation", new ReplaceStrategy());
+			state.registerKeyAndStrategy("observation", new AppendStrategy());
+			state.registerKeyAndStrategy("memory", new ReplaceStrategy());
 			state.registerKeyAndStrategy("final_output", new ReplaceStrategy());
 			return state;
 		};

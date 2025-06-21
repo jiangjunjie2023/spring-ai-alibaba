@@ -55,3 +55,10 @@ spring:
       embedding:
         options:
           model: text-embedding-v1
+logging:
+  level:
+    org.springframework.ai: DEBUG
+    org.springframework.web.client: DEBUG
+    org.springframework.web.reactive.function.client: DEBUG
+    org.springframework.http.client: DEBUG
+    org.springframework.ai.openai: DEBUG
