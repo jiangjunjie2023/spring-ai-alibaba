@@ -45,19 +45,22 @@ public class AiConfig {
 	@Bean("myChatModel")
 	public ChatModel myChatModel() {
 		OpenAiApi openAiApi = OpenAiApi.builder()
-				// https://xone-txgw1.test.xdf.cn/ai-pawn-t2-5701
-				.baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
-				// test 19c275910fc749dcb4479b6c4608566a
-				// pro  73847ef6649c9ec85ac147ecf1330cd0
-				// ali  sk-ec63ec37f5ec442f9e446eb7fc87ff49
-				.apiKey(new SimpleApiKey("sk-ec63ec37f5ec442f9e446eb7fc87ff49"))
-				.completionsPath("/v1/chat/completions")
-				.embeddingsPath("/v1/embeddings")
-				.build();
-		//豆包 ep-20240918193656-wn85w
-		//门神 gpt-4o
-		//ali qwen-max-latest
-		OpenAiChatOptions openAiChatOptions = OpenAiChatOptions.builder().model("qwen-max-latest").temperature(0.8).build();
+			// https://xone-txgw1.test.xdf.cn/ai-pawn-t2-5701
+			.baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
+			// test 19c275910fc749dcb4479b6c4608566a
+			// pro 73847ef6649c9ec85ac147ecf1330cd0
+			// ali sk-ec63ec37f5ec442f9e446eb7fc87ff49
+			.apiKey(new SimpleApiKey("sk-ec63ec37f5ec442f9e446eb7fc87ff49"))
+			.completionsPath("/v1/chat/completions")
+			.embeddingsPath("/v1/embeddings")
+			.build();
+		// 豆包 ep-20240918193656-wn85w
+		// 门神 gpt-4o
+		// ali qwen-max-latest
+		OpenAiChatOptions openAiChatOptions = OpenAiChatOptions.builder()
+			.model("qwen-max-latest")
+			.temperature(0.8)
+			.build();
 		return OpenAiChatModel.builder().openAiApi(openAiApi).defaultOptions(openAiChatOptions).build();
 	}
 
