@@ -97,10 +97,11 @@ public class AppAgentWorkflowConfig {
 			state.registerKeyAndStrategy("human_next_node", new ReplaceStrategy());
 			// 用户输入
 			state.registerKeyAndStrategy("query", new ReplaceStrategy());
-			state.registerKeyAndStrategy("auto_accepted_plan", new ReplaceStrategy());
 			state.registerKeyAndStrategy("max_plan_iterations", new ReplaceStrategy());
 			state.registerKeyAndStrategy("max_step_num", new ReplaceStrategy());
-			state.registerKeyAndStrategy("feed_back_content", new ReplaceStrategy());
+			state.registerKeyAndStrategy("classCnt", new ReplaceStrategy());
+
+			state.registerKeyAndStrategy("feedback", new ReplaceStrategy());
 
 			// 节点输出
 			state.registerKeyAndStrategy("output", new ReplaceStrategy());
@@ -119,8 +120,9 @@ public class AppAgentWorkflowConfig {
 			.addEdge(START, "start")
 			.addEdge("start", "node1")
 			.addEdge("node1", "human_feedback")
-			.addEdge("human_feedback", "node2")
-			.addEdge("node2", "finish")
+			.addConditionalEdges("human_feedback", AsyncEdgeAction.edge_async(new HumanFeedbackDispatcher()),
+					Map.of("node2", "node2", "finish", "finish"))
+			.addEdge("node2", END)
 			.addEdge("finish", END);
 
 		GraphRepresentation graphRepresentation = stateGraph.getGraph(GraphRepresentation.Type.MERMAID,

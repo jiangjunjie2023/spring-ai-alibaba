@@ -4,7 +4,6 @@ import com.alibaba.cloud.ai.graph.*;
 import com.alibaba.cloud.ai.graph.checkpoint.config.SaverConfig;
 import com.alibaba.cloud.ai.graph.checkpoint.constant.SaverConstant;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
-import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.state.StateSnapshot;
 import com.alibaba.fastjson.JSON;
@@ -54,32 +53,36 @@ public class AppAgentController {
 	AppAgentWorkflowConfig appAgentWorkflowConfig;
 
 	/**
-	 * SSE (Server-Sent Events) endpoint for chat streaming.
-	 *
 	 * Accepts a ChatRequest and returns a Flux that streams chat responses as
 	 * ServerSentEvent<String>. Supports both initial questions and human feedback
 	 * handling.
 	 */
 	@PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-	public Flux<ServerSentEvent<String>> chatStream(@RequestBody(required = false) MyRequest chatRequest)
-			throws GraphStateException {
+	public Flux<ServerSentEvent<String>> chatStream(@RequestBody MyRequest chatRequest) throws GraphStateException {
 		logger.info("chatStream, 收到请求，chatRequest={}", chatRequest);
-		chatRequest = getDefaultChatRequest(chatRequest);
-
 		Map<String, Object> objectMap = new HashMap<>();
+		RunnableConfig runnableConfig = RunnableConfig.builder().threadId(chatRequest.threadId()).build();
 		// Create a unicast sink to emit ServerSentEvents
 		Sinks.Many<ServerSentEvent<String>> sink = Sinks.many().unicast().onBackpressureBuffer();
+		if (StringUtils.hasText(chatRequest.feedback())) {
+			objectMap.put("feedback", chatRequest.feedback());
 
-		SaverConfig saverConfig = SaverConfig.builder().register(SaverConstant.MEMORY, new MemorySaver()).build();
-		compiledGraph = appAgentWorkflowConfig.queryWithHuman()
-			.compile(CompileConfig.builder().saverConfig(saverConfig).interruptBefore("human_feedback").build());
-		// Handle human feedback if auto-accept is disabled and feedback is provided
-		RunnableConfig runnableConfig = RunnableConfig.builder().threadId(chatRequest.threadId()).build();
-		if (!chatRequest.autoAcceptPlan() && StringUtils.hasText(chatRequest.interruptFeedback())) {
-			handleHumanFeedback(chatRequest, objectMap, runnableConfig, sink);
+			// 恢复工作流
+			StateSnapshot stateSnapshot = compiledGraph.getState(runnableConfig);
+			OverAllState state = stateSnapshot.state();
+			state.withResume();
+			state.withHumanFeedback(new OverAllState.HumanFeedback(objectMap, "human_feedback"));
+			// 重启工作流
+			AsyncGenerator<NodeOutput> resultFuture = compiledGraph.streamFromInitialNode(state, runnableConfig);
+			processStream(resultFuture, sink);
 		}
-		// First question
+		// 初始问题, 首次启动工作流
 		else {
+			// 构建可恢复的工作流 设定某节点需要人类的反馈信息
+			SaverConfig saverConfig = SaverConfig.builder().register(SaverConstant.MEMORY, new MemorySaver()).build();
+			compiledGraph = appAgentWorkflowConfig.queryWithHuman()
+				.compile(CompileConfig.builder().saverConfig(saverConfig).interruptBefore("human_feedback").build());//
+
 			initializeObjectMap(chatRequest, objectMap);
 			logger.info("init inputs: {}", objectMap);
 			AsyncGenerator<NodeOutput> resultFuture = compiledGraph.stream(objectMap, runnableConfig);
@@ -87,39 +90,23 @@ public class AppAgentController {
 		}
 
 		return sink.asFlux()
-			.doOnCancel(() -> logger.info("Client disconnected from stream"))
-			.doOnError(e -> logger.error("Error occurred during streaming", e));
+			.doOnCancel(() -> logger.info("chatStream, Client disconnected from stream"))
+			.doOnError(e -> logger.error("chatStream, Error occurred during streaming", e));
 	}
 
-	@PostMapping("/chat/resume")
-	public Map<String, Object> resume(@RequestBody(required = false) FeedbackRequest humanFeedback) {
+	/**
+	 * 恢复流式对话
+	 */
+	@PostMapping(value = "/chat/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	public Flux<ServerSentEvent<String>> resume(@RequestBody FeedbackRequest humanFeedback) {
 		logger.info("resume, 收到请求，humanFeedback={}", humanFeedback);
 		RunnableConfig runnableConfig = RunnableConfig.builder().threadId(humanFeedback.threadId()).build();
 		Map<String, Object> objectMap = new HashMap<>();
 		objectMap.put("feedback", humanFeedback.feedBack());
-		objectMap.put("feed_back_content", humanFeedback.feedBackContent());
 
 		StateSnapshot stateSnapshot = compiledGraph.getState(runnableConfig);
 		OverAllState state = stateSnapshot.state();
 		state.withResume();
-		state.withHumanFeedback(new OverAllState.HumanFeedback(objectMap, "node2"));
-
-		var resultFuture = compiledGraph.invoke(state, runnableConfig);
-		return resultFuture.get().data();
-	}
-
-	@GetMapping(value = "/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-	public Flux<ServerSentEvent<String>> resume(@RequestParam(value = "threadid") String threadId,
-												@RequestParam(value = "feedback") boolean feedBack)
-			throws GraphRunnerException {
-		RunnableConfig runnableConfig = RunnableConfig.builder().threadId(threadId).build();
-		StateSnapshot stateSnapshot = this.compiledGraph.getState(runnableConfig);
-		OverAllState state = stateSnapshot.state();
-		state.withResume();
-
-		Map<String, Object> objectMap = new HashMap<>();
-		objectMap.put("feedback", feedBack);
-
 		state.withHumanFeedback(new OverAllState.HumanFeedback(objectMap, ""));
 
 		// Create a unicast sink to emit ServerSentEvents
@@ -128,10 +115,13 @@ public class AppAgentController {
 		processStream(resultFuture, sink);
 
 		return sink.asFlux()
-			.doOnCancel(() -> logger.info("Client disconnected from stream"))
-			.doOnError(e -> logger.error("Error occurred during streaming", e));
+			.doOnCancel(() -> logger.info("resume, Client disconnected from stream"))
+			.doOnError(e -> logger.error("resume, Error occurred during streaming", e));
 	}
 
+	/**
+	 * 固定工作流
+	 */
 	@GetMapping("/chatv2")
 	public String chatV2(String input) throws GraphStateException {
 		logger.info("收到请求，input={}", input);
@@ -142,40 +132,12 @@ public class AppAgentController {
 		return output;
 	}
 
-	/**
-	 * Creates a default ChatRequest instance or set some default value for an instance.
-	 */
-	private static MyRequest getDefaultChatRequest(MyRequest chatRequest) {
-		if (chatRequest == null) {
-			return new MyRequest("__default__", 1, 3, true, null, "草莓蛋糕怎么做呀。");
-		}
-		else {
-			return new MyRequest(StringUtils.hasText(chatRequest.threadId()) ? chatRequest.threadId() : "__default__",
-					chatRequest.maxPlanIterations() == null ? 1 : chatRequest.maxPlanIterations(),
-					chatRequest.maxStepNum() == null ? 3 : chatRequest.maxStepNum(),
-					chatRequest.autoAcceptPlan() == null || chatRequest.autoAcceptPlan(),
-					chatRequest.interruptFeedback(),
-					StringUtils.hasText(chatRequest.query()) ? chatRequest.query() : "草莓蛋糕怎么做呀");
-		}
-	}
-
 	private static void initializeObjectMap(MyRequest chatRequest, Map<String, Object> objectMap) {
 		objectMap.put("thread_id", chatRequest.threadId());
-		objectMap.put("auto_accepted_plan", chatRequest.autoAcceptPlan());
 		objectMap.put("query", chatRequest.query());
-		objectMap.put("max_step_num", chatRequest.maxStepNum());
 		objectMap.put("max_plan_iterations", chatRequest.maxPlanIterations());
-	}
-
-	public void handleHumanFeedback(MyRequest chatRequest, Map<String, Object> objectMap, RunnableConfig runnableConfig,
-			Sinks.Many<ServerSentEvent<String>> sink) {
-		objectMap.put("feed_back", chatRequest.interruptFeedback());
-		StateSnapshot stateSnapshot = compiledGraph.getState(runnableConfig);
-		OverAllState state = stateSnapshot.state();
-		state.withResume();
-		state.withHumanFeedback(new OverAllState.HumanFeedback(objectMap, "node2"));
-		AsyncGenerator<NodeOutput> resultFuture = compiledGraph.streamFromInitialNode(state, runnableConfig);
-		processStream(resultFuture, sink);
+		objectMap.put("max_step_num", chatRequest.maxStepNum());
+		objectMap.put("feedback", chatRequest.feedback());
 	}
 
 	private final ExecutorService executor = Executors.newSingleThreadExecutor();

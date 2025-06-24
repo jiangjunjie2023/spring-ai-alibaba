@@ -2,6 +2,7 @@ package com.alibaba.cloud.ai.example.graph.node;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
+import org.apache.commons.lang3.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,13 +34,16 @@ public class Node1 implements NodeAction {
 			input = outputObj != null ? outputObj.toString() : "";
 		}
 
-		// logger.info("Node1, 收到input: {}", input);
+		logger.info("Node1, 收到input: {}", input);
 
 		Thread.sleep(2000); // 模拟耗时2秒
-		String output = "node1 output";
+
+		String output = "想要查询哪个班呢? [A/B/C/D]：";
 
 		Map<String, Object> updated = new HashMap<>();
 		updated.put("output", output);
+		Integer classCnt = RandomUtils.nextInt(1, 5);
+		updated.put("classCnt", classCnt);
 		logger.info("Node1, 返回的updated: {}", updated);
 		return updated;
 	}

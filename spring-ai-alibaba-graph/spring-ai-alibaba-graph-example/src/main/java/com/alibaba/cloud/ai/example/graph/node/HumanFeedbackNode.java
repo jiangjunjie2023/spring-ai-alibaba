@@ -19,9 +19,9 @@ package com.alibaba.cloud.ai.example.graph.node;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.exception.GraphInterruptException;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,66 +36,46 @@ public class HumanFeedbackNode implements NodeAction {
 	private static final Logger logger = LoggerFactory.getLogger(HumanFeedbackNode.class);
 
 	@Override
-	public Map<String, Object> apply(OverAllState state) throws Exception {
-		logger.info("HumanFeedbackNode is running.");
-		String nextStep = "node2";
-		Map<String, Object> updated = new HashMap<>();
+	public Map<String, Object> apply(OverAllState state) throws GraphInterruptException {
+		logger.info("HumanFeedbackNode, 收到的完整state: {}", state.data());
+		String nextStep = "finish";
 
+		Map<String, Object> updated = new HashMap<>();
 		// auto_accepted、yes、no 迭代次数都+1
 		updated.put("plan_iterations", getPlanIterations(state) + 1);
 
-		if (!getAutoAcceptedPlan(state)) {
-			// todo 这里改为接口形式
-			logger.info("Do you accept the plan? [y/n]：");
+		boolean needChooseClass = state.value("classCnt", 0) > 1;
+		logger.info("HumanFeedbackNode needChooseClass = {}", needChooseClass);
+		if (needChooseClass) {
+			// 需要反馈 且 未拿到反馈时 中断
 			interrupt(state);
 
 			Map<String, Object> feedBackData = state.humanFeedback().data();
-			boolean feedback = (boolean) feedBackData.getOrDefault("feed_back", true);
+			String feedback = feedBackData.getOrDefault("feedback", "A").toString();
+			logger.info("Human feedback content: {}", feedback);
 
-			if (!feedback) {
+			if (!StringUtils.isEmpty(feedback)) {
 				nextStep = "node2";
-				updated.put("human_next_node", nextStep);
-
-				String feedbackContent = feedBackData.getOrDefault("feed_back_content", "").toString();
-				if (StringUtils.hasLength(feedbackContent)) {
-					updated.put("feed_back_content", feedbackContent);
-					logger.info("Human feedback content: {}", feedbackContent);
-				}
+				String output = updated.getOrDefault("output", "") + ", " + feedback;
+				updated.put("output", output);
+				// 重置为非恢复状态
 				state.withoutResume();
-				logger.info("HumanFeedbackNode -> {} node", nextStep);
-				return updated;
 			}
 		}
-
 		updated.put("human_next_node", nextStep);
 		logger.info("HumanFeedbackNode -> {} node", nextStep);
 		return updated;
 	}
 
 	private void interrupt(OverAllState state) throws GraphInterruptException {
-		if (state.humanFeedback() == null || !state.isResume()) {
+		// 只有首次执行且没有人工反馈时才中断
+		if (!state.isResume() && state.humanFeedback() == null) {
 			throw new GraphInterruptException("interrupt");
 		}
 	}
 
 	public static Integer getPlanIterations(OverAllState state) {
 		return state.value("plan_iterations", 0);
-	}
-
-	public static Integer getPlanMaxIterations(OverAllState state) {
-		return state.value("plan_max_iterations", 1);
-	}
-
-	public static Integer getMaxStepNum(OverAllState state) {
-		return state.value("max_step_num", 3);
-	}
-
-	public static String getThreadId(OverAllState state) {
-		return state.value("thread_id", "__default__");
-	}
-
-	public static boolean getAutoAcceptedPlan(OverAllState state) {
-		return state.value("auto_accepted_plan", true);
 	}
 
 }
