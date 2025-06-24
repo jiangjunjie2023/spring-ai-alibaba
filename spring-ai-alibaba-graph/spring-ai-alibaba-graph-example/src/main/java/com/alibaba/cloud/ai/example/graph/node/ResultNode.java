@@ -1,4 +1,4 @@
-package com.alibaba.cloud.ai.example.graph.appagent;
+package com.alibaba.cloud.ai.example.graph.node;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
@@ -10,13 +10,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class Node1 implements NodeAction {
+public class ResultNode implements NodeAction {
 
-	private static final Logger logger = LoggerFactory.getLogger(Node1.class);
+	private static final Logger logger = LoggerFactory.getLogger(ResultNode.class);
 
 	@Override
 	public Map<String, Object> apply(OverAllState state) throws Exception {
-		logger.info("Node1, 收到的完整state: {}", state.data());
+		logger.info("ResultNode, 收到的完整state: {}", state.data());
 		String input = "";
 		Object outputObj = state.value("output").orElse(null);
 		if (outputObj instanceof String) {
@@ -33,14 +33,13 @@ public class Node1 implements NodeAction {
 			input = outputObj != null ? outputObj.toString() : "";
 		}
 
-		logger.info("Node1, 收到input: {}", input);
+		logger.info("ResultNode, 收到input: {}", input);
 
-		Thread.sleep(2000); // 模拟耗时2秒
-		String output = "node1 output";
+		String output = "result:" + input;
 
 		Map<String, Object> updated = new HashMap<>();
-		updated.put("output", output);
-		logger.info("Node1, 返回的updated: {}", updated);
+		updated.put("final_output", output);
+		logger.info("ResultNode, 返回的updated: {}", updated);
 		return updated;
 	}
 

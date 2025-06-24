@@ -1,5 +1,8 @@
-package com.alibaba.cloud.ai.example.graph.appagent;
+package com.alibaba.cloud.ai.example.graph.node;
 
+import com.alibaba.cloud.ai.example.graph.tool.StudentInfoTool;
+import com.alibaba.cloud.ai.example.graph.tool.TeacherInfoTool;
+import com.alibaba.cloud.ai.example.graph.tool.XubanCheckTool;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.google.gson.Gson;

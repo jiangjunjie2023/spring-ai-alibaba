@@ -1,4 +1,4 @@
-package com.alibaba.cloud.ai.example.graph.appagent;
+package com.alibaba.cloud.ai.example.graph.node;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;

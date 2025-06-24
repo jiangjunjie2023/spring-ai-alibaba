@@ -1,4 +1,4 @@
-package com.alibaba.cloud.ai.example.graph.appagent;
+package com.alibaba.cloud.ai.example.graph.tool;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;

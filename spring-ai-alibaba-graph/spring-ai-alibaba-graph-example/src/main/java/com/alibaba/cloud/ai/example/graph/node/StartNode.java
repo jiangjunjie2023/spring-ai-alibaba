@@ -1,4 +1,4 @@
-package com.alibaba.cloud.ai.example.graph.appagent;
+package com.alibaba.cloud.ai.example.graph.node;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
@@ -16,7 +16,7 @@ public class StartNode implements NodeAction {
 	public Map<String, Object> apply(OverAllState state) throws Exception {
 		logger.info("StartNode, 收到的完整state: {}", state.data());
 		String input = (String) state.value("input").orElse("");
-		logger.info("StartNode, 收到input: {}", input);
+		// logger.info("StartNode, 收到input: {}", input);
 
 		String output = "start node finished.";
 
