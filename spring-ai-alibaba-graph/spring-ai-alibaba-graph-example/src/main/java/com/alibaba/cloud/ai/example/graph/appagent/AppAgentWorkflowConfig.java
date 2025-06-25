@@ -1,12 +1,15 @@
 package com.alibaba.cloud.ai.example.graph.appagent;
 
 import com.alibaba.cloud.ai.example.graph.node.*;
+import com.alibaba.cloud.ai.example.graph.node.xuban.XbNode1;
+import com.alibaba.cloud.ai.example.graph.node.xuban.XbNode2;
 import com.alibaba.cloud.ai.graph.GraphRepresentation;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.OverAllStateFactory;
 import com.alibaba.cloud.ai.graph.StateGraph;
 import com.alibaba.cloud.ai.graph.action.AsyncEdgeAction;
 import com.alibaba.cloud.ai.graph.action.AsyncNodeAction;
+import com.alibaba.cloud.ai.graph.exception.GraphInterruptException;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.state.strategy.AppendStrategy;
 import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
@@ -93,21 +96,21 @@ public class AppAgentWorkflowConfig {
 
 		OverAllStateFactory stateFactory = () -> {
 			OverAllState state = new OverAllState();
-			// 条件边控制：跳转下一个节点
-			state.registerKeyAndStrategy("human_next_node", new ReplaceStrategy());
-			// 用户输入
+			// 接口入参
 			state.registerKeyAndStrategy("query", new ReplaceStrategy());
 			state.registerKeyAndStrategy("max_plan_iterations", new ReplaceStrategy());
 			state.registerKeyAndStrategy("max_step_num", new ReplaceStrategy());
 			state.registerKeyAndStrategy("classCnt", new ReplaceStrategy());
-
+			// 用户输入
 			state.registerKeyAndStrategy("feedback", new ReplaceStrategy());
-
+			// 条件边控制：跳转下一个节点
+			state.registerKeyAndStrategy("human_next_node", new ReplaceStrategy());
 			// 节点输出
 			state.registerKeyAndStrategy("output", new ReplaceStrategy());
+			state.registerKeyAndStrategy("interrupt_tip", new ReplaceStrategy());
 			state.registerKeyAndStrategy("plan_iterations", new ReplaceStrategy());
 			state.registerKeyAndStrategy("observations", new ReplaceStrategy());
-			state.registerKeyAndStrategy("final_report", new ReplaceStrategy());
+			state.registerKeyAndStrategy("final_output", new ReplaceStrategy());
 			return state;
 		};
 
@@ -128,6 +131,43 @@ public class AppAgentWorkflowConfig {
 		GraphRepresentation graphRepresentation = stateGraph.getGraph(GraphRepresentation.Type.MERMAID,
 				"workflow graph");
 
+		log.info("\n\n");
+		log.info(graphRepresentation.content());
+		log.info("\n\n");
+
+		return stateGraph;
+	}
+
+	public StateGraph xubanFlow() throws GraphStateException {
+		ChatClient chatClient = ChatClient.builder(chatModel).defaultAdvisors(new SimpleLoggerAdvisor()).build();
+
+		OverAllStateFactory stateFactory = () -> {
+			OverAllState state = new OverAllState();
+			state.registerKeyAndStrategy("input", new ReplaceStrategy());
+			state.registerKeyAndStrategy("feedback", new ReplaceStrategy());
+			state.registerKeyAndStrategy("observation", new AppendStrategy());
+			state.registerKeyAndStrategy("output", new AppendStrategy());
+			//state.registerKeyAndStrategy("chat_history", new ReplaceStrategy());
+			//state.registerKeyAndStrategy("memory", new ReplaceStrategy());
+			state.registerKeyAndStrategy("final_output", new ReplaceStrategy());
+			return state;
+		};
+
+		StateGraph stateGraph = new StateGraph("Xuban Workflow", stateFactory)
+			// 负责获取全部信息
+			.addNode("node1", AsyncNodeAction.node_async(new XbNode1(chatClient)))
+			// 负责按已有信息查询续班情况
+			.addNode("node2", AsyncNodeAction.node_async(new XbNode2(chatClient)))
+			// 结果处理
+			.addNode("finish", AsyncNodeAction.node_async(new FinishNode()))
+			.addConditionalEdges(START, AsyncEdgeAction.edge_async(new IntentionDispatcher()),
+					Map.of("valid", "node1", "invalid", "finish"))
+			.addEdge("node1", "node2")
+			.addEdge("node2", "finish")
+			.addEdge("finish", END);
+
+		GraphRepresentation graphRepresentation = stateGraph.getGraph(GraphRepresentation.Type.MERMAID,
+				"续班workflow");
 		log.info("\n\n");
 		log.info(graphRepresentation.content());
 		log.info("\n\n");

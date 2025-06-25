@@ -4,6 +4,7 @@ import com.alibaba.cloud.ai.graph.*;
 import com.alibaba.cloud.ai.graph.checkpoint.config.SaverConfig;
 import com.alibaba.cloud.ai.graph.checkpoint.constant.SaverConstant;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
+import com.alibaba.cloud.ai.graph.exception.GraphInterruptException;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.state.StateSnapshot;
 import com.alibaba.fastjson.JSON;
@@ -132,11 +133,55 @@ public class AppAgentController {
 		return output;
 	}
 
+	@PostMapping(value = "/chat/xuban", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	public Flux<ServerSentEvent<String>> chatXuban(@RequestBody CommonRequest chatRequest) throws GraphStateException {
+		logger.info("chatXuban, 收到请求，chatRequest={}", chatRequest);
+		Map<String, Object> objectMap = new HashMap<>();
+		RunnableConfig runnableConfig = RunnableConfig.builder().threadId(chatRequest.threadId()).build();
+		// Create a unicast sink to emit ServerSentEvents
+		Sinks.Many<ServerSentEvent<String>> sink = Sinks.many().unicast().onBackpressureBuffer();
+		if (StringUtils.hasText(chatRequest.feedback())) {
+			initParams(chatRequest, objectMap);
+			logger.info("chatXuban, resume inputs: {}", objectMap);
+
+			// 恢复工作流
+			StateSnapshot stateSnapshot = compiledGraph.getState(runnableConfig);
+			OverAllState state = stateSnapshot.state();
+			state.withResume();
+			state.withHumanFeedback(new OverAllState.HumanFeedback(objectMap, "node1"));
+			// 重启工作流
+			AsyncGenerator<NodeOutput> resultFuture = compiledGraph.streamFromInitialNode(state, runnableConfig);
+			processStream(resultFuture, sink);
+		} else {
+			// 初始问题, 首次启动工作流
+			// 构建可恢复的工作流 设定某节点需要人类的反馈信息
+			SaverConfig saverConfig = SaverConfig.builder().register(SaverConstant.MEMORY, new MemorySaver()).build();
+			compiledGraph = appAgentWorkflowConfig.xubanFlow()
+				.compile(CompileConfig.builder().saverConfig(saverConfig).build());//.interruptBefore("node2")
+
+			initParams(chatRequest, objectMap);
+			logger.info("chatXuban, init inputs: {}", objectMap);
+			AsyncGenerator<NodeOutput> resultFuture = compiledGraph.stream(objectMap, runnableConfig);
+
+			processStream(resultFuture, sink);
+		}
+
+		return sink.asFlux()
+			.doOnCancel(() -> logger.info("chatStream, Client disconnected from stream"))
+			.doOnError(e -> logger.error("chatStream, Error occurred during streaming", e));
+	}
+
 	private static void initializeObjectMap(MyRequest chatRequest, Map<String, Object> objectMap) {
 		objectMap.put("thread_id", chatRequest.threadId());
 		objectMap.put("query", chatRequest.query());
 		objectMap.put("max_plan_iterations", chatRequest.maxPlanIterations());
 		objectMap.put("max_step_num", chatRequest.maxStepNum());
+		objectMap.put("feedback", chatRequest.feedback());
+	}
+
+	private static void initParams(CommonRequest chatRequest, Map<String, Object> objectMap) {
+		objectMap.put("thread_id", chatRequest.threadId());
+		objectMap.put("input", chatRequest.input());
 		objectMap.put("feedback", chatRequest.feedback());
 	}
 
@@ -147,15 +192,37 @@ public class AppAgentController {
 			generator.forEachAsync(output -> {
 				try {
 					Map<String, Object> data = output.state().data();
-					sink.tryEmitNext(ServerSentEvent.builder(JSON.toJSONString(data)).build());
+					String json = JSON.toJSONString(data);
+					logger.info("processStream, json={}", json);
+					sink.tryEmitNext(ServerSentEvent.builder(json).build());
 				}
 				catch (Exception e) {
+					logger.error("processStream, error", e);
 					throw new CompletionException(e);
 				}
 			}).thenAccept(v -> {
+				logger.info("processStream, complete");
 				// 正常完成
 				sink.tryEmitComplete();
 			}).exceptionally(e -> {
+				logger.error("processStream error", e);
+				// 递归查找 GraphInterruptException
+				Throwable cause = e;
+				while (cause != null) {
+					if (cause instanceof GraphInterruptException) {
+						GraphInterruptException gie = (GraphInterruptException) cause;
+						// 构造中断提示消息
+						Map<String, Object> interruptMsg = new HashMap<>();
+						interruptMsg.put("interrupt", true);
+						interruptMsg.put("interrupt_tip", gie.getMessage());
+						String json = JSON.toJSONString(interruptMsg);
+						logger.info("processStream, interrupt: {}", json);
+						sink.tryEmitNext(ServerSentEvent.builder(json).build());
+						sink.tryEmitComplete();
+						return null;
+					}
+					cause = cause.getCause();
+				}
 				sink.tryEmitError(e);
 				return null;
 			});

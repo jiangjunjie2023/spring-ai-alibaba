@@ -16,15 +16,13 @@ public class FinishNode implements NodeAction {
 
 	@Override
 	public Map<String, Object> apply(OverAllState state) throws Exception {
-		logger.info("FinishNode收到的完整state: {}", state.data());
-		String agentOutcome = (String) state.value("agent_outcome").orElse("");
-		logger.info("FinishNode收到agent_outcome: {}", agentOutcome);
+		logger.info("state: {}", state.data());
+		String output = (String) state.value("output").orElse("");
+		logger.info("output: {}", output);
 
-		String output = "";
-		ActionNode.AgentResponse response = new Gson().fromJson(agentOutcome, ActionNode.AgentResponse.class);
+		ActionNode.AgentResponse response = new Gson().fromJson(output, ActionNode.AgentResponse.class);
 		if (response == null || StringUtils.isEmpty(response.getAction())) {
 			logger.info("未识别的结果，直接返回agentOutcome");
-			output = agentOutcome;
 		}
 		else if (response.getAction().equals("finalAnswer")) {
 			output = response.getOutput();
@@ -32,11 +30,12 @@ public class FinishNode implements NodeAction {
 		else {
 			output = "";
 		}
-		logger.info("FinishNode返回: {}", output);
+		String finalOutput = StringUtils.isEmpty(output) ? "未查到数据" : output;
+		logger.info("final_output: {}", output);
 
 		Map<String, Object> updated = new HashMap<>();
 		updated.put("final_output", output);
-		logger.info("FinishNode返回的updated: {}", updated);
+		logger.info("updated: {}", updated);
 		return updated;
 	}
 

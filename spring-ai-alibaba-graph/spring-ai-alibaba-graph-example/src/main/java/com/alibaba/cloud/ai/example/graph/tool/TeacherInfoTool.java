@@ -22,8 +22,9 @@ public class TeacherInfoTool {
 		HttpEntity<String> entity = new HttpEntity<>(headers);
 		try {
 			ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-			if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-				return "教师身份: " + response.getBody();
+			log.error("queryTeacherIdentity, response: {}", response);
+			if (response.getBody() != null) {
+				return "教师身份接口返回: " + response.getBody();
 			}
 			else {
 				log.error("queryTeacherIdentity, error: {}", response.getBody());
