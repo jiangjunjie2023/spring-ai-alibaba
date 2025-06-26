@@ -19,22 +19,26 @@ public class FinishNode implements NodeAction {
 		logger.info("state: {}", state.data());
 		String output = (String) state.value("output").orElse("");
 		logger.info("output: {}", output);
+		try {
+			ActionNode.AgentResponse response = new Gson().fromJson(output, ActionNode.AgentResponse.class);
+			if (response != null && !StringUtils.isEmpty(response.getAction())
+					&& response.getAction().equals("finalAnswer")) {
+				output = response.getOutput();
+			}
+			else {
+				logger.info("未识别的结果，直接返回上一节点的结果={}", output);
+			}
+		}
+		catch (Exception e) {
+			logger.error(e.getMessage(), e);
+			logger.info("未识别的结果，直接返回上一节点的结果={}", output);
+		}
 
-		ActionNode.AgentResponse response = new Gson().fromJson(output, ActionNode.AgentResponse.class);
-		if (response == null || StringUtils.isEmpty(response.getAction())) {
-			logger.info("未识别的结果，直接返回agentOutcome");
-		}
-		else if (response.getAction().equals("finalAnswer")) {
-			output = response.getOutput();
-		}
-		else {
-			output = "";
-		}
 		String finalOutput = StringUtils.isEmpty(output) ? "未查到数据" : output;
-		logger.info("final_output: {}", output);
+		logger.info("final_output: {}", finalOutput);
 
 		Map<String, Object> updated = new HashMap<>();
-		updated.put("final_output", output);
+		updated.put("final_output", finalOutput);
 		logger.info("updated: {}", updated);
 		return updated;
 	}

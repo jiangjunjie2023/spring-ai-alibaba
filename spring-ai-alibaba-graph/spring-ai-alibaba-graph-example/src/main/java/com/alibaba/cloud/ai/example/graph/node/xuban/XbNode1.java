@@ -90,13 +90,23 @@ public class XbNode1 implements NodeAction {
 	public Map<String, Object> apply(OverAllState state) throws GraphInterruptException {
 		logger.info("Node1, state: {}", state.data());
 		logger.info("Node1, resume: {}", state.isResume());
-		logger.info("Node1, human: {}", state.humanFeedback());
-		String input = (String) state.value("input").orElse("");
-		logger.info("Node1, input: {}", input);
-		String observation = (String) state.value("observation").orElse("");
-		logger.info("Node1, observation: {}", observation);
 		String feedback = (String) state.value("feedback").orElse("");
 		logger.info("Node1, feedback: {}", feedback);
+		OverAllState.HumanFeedback humanFeedback = state.humanFeedback();
+		logger.info("Node1, human: {}", humanFeedback);
+		if (humanFeedback != null && humanFeedback.data() != null) {
+			logger.info("Node1, humanFeedback: {}", humanFeedback.data());
+			feedback = (String) humanFeedback.data().get("feedback");
+			logger.info("Node1, feedback: {}", feedback);
+		}
+		String input = (String) state.value("input").orElse("");
+		logger.info("Node1, input: {}", input);
+		String observation = state.value("observation").orElse("").toString();
+		// List observationList = state.value("observation", List.class).orElse(new
+		// ArrayList<>());
+		// logger.info("Node1, observation: {}", observationList);
+		// observation = StringUtils.join(observationList, ",");
+		logger.info("Node1, observation: {}", observation);
 
 		Map<String, Object> updated = new HashMap<>();
 		if (StringUtils.isEmpty(feedback)) {
@@ -119,19 +129,23 @@ public class XbNode1 implements NodeAction {
 			}
 			else if (classCodeList.size() > 1) {
 				String interrupt_tip = "想要查询哪个班呢?" + StringUtils.join(classCodeList, ",");
+				updated.put("interrupt", true);
 				updated.put("interrupt_tip", interrupt_tip);
 				logger.info("Node1, interrupt_tip={}", interrupt_tip);
-				interrupt(state, interrupt_tip);
+				updated.put("observation", observation);
+				return updated;
 			}
 			else {
 				observation += ", 指定的班号是" + classCodeList.get(0);
 			}
-		} else {
+		}
+		else {
 			observation += ", 指定的班号是" + feedback;
 		}
 
-		observation = forNext(input, observation);
-		updated.put("observation", observation);// tool params json for next node
+		updated.put("observation", observation);
+		String action = buildContinueClassAction(input, observation);
+		updated.put("output", action);// tool params json for next node
 		logger.info("Node1, 返回的updated: {}", updated);
 		return updated;
 	}
@@ -139,9 +153,9 @@ public class XbNode1 implements NodeAction {
 	private Map<String, Object> classCodeList(String input) {
 		Map<String, Object> updated = new HashMap<>();
 		// 查询身份信息
-		String email = "zhouchanghua@xdf.cn";
-		String e2e = "21D9AAB155F13810995FD41F3088F4A1";
-		String e2mf = "66c180202a4f4a45869b0231cb59522b";
+		String email = "liusijia4@xdf.cn";// ""zhouchanghua@xdf.cn";
+		String e2e = "63028BF4820382A5B2807AA03E0DA30C";// ""21D9AAB155F13810995FD41F3088F4A1";
+		String e2mf = "4366d8622a51450a9e151bf54ce17b3d";// ""66c180202a4f4a45869b0231cb59522b";
 		logger.info("Node1, 调用TeacherInfoTool, 参数: email={}, e2e={}, e2mf={}", email, e2e, e2mf);
 		String identity = TeacherInfoTool.queryTeacherIdentity(email, e2e, e2mf);
 
@@ -204,9 +218,9 @@ public class XbNode1 implements NodeAction {
 		return updated;
 	}
 
-	private String forNext(String input, String observation) {
+	private String buildContinueClassAction(String input, String observation) {
 		// 查询身份信息
-		logger.info("forNext, input={}, observation={}", input, observation);
+		logger.info("buildContinueClassAction, input={}, observation={}", input, observation);
 		// 组装工具描述和工具名
 		String toolsDesc = "xuban_check: 查询学生信息，参数：schoolId, teacherCode, classCode";
 
@@ -219,19 +233,25 @@ public class XbNode1 implements NodeAction {
 
 		model.put("currentContext", observation);
 		String prompt = systemPromptTemplate.render(model);
-		logger.info("forNext, prompt: {}", prompt);
+		logger.info("buildContinueClassAction, prompt: {}", prompt);
 
 		// 调用大模型
 		String result = chatClient.prompt().user(prompt).call().content();
-		logger.info("forNext LLM返回: {}", result);
+		logger.info("buildContinueClassAction LLM返回: {}", result);
 		return result;
 	}
 
-	private void interrupt(OverAllState state, String tip) throws GraphInterruptException {
-		// 只有首次执行且没有人工反馈时才中断
-		if (!state.isResume() && state.humanFeedback() == null) {
-			throw new GraphInterruptException(tip);
-		}
+	public static void main(String[] args) throws Exception {
+		// String email = "liusijia4@xdf.cn";//""zhouchanghua@xdf.cn";
+		// String e2e =
+		// "63028BF4820382A5B2807AA03E0DA30C";//""21D9AAB155F13810995FD41F3088F4A1";
+		// String e2mf =
+		// "4366d8622a51450a9e151bf54ce17b3d";//""66c180202a4f4a45869b0231cb59522b";
+		// String identity = TeacherInfoTool.queryTeacherIdentity(email, e2e, e2mf);
+		// System.out.println(identity);
+
+		List<String> toolResult = TeacherClassesTool.queryClasses("T202306090175", 22);
+		System.out.println(toolResult);
 	}
 
 }

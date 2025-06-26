@@ -139,16 +139,21 @@ public class AppAgentWorkflowConfig {
 	}
 
 	public StateGraph xubanFlow() throws GraphStateException {
-		ChatClient chatClient = ChatClient.builder(chatModel).defaultAdvisors(new SimpleLoggerAdvisor()).build();
+		ChatClient chatClient = ChatClient.builder(chatModel).build();// .defaultAdvisors(new
+																		// SimpleLoggerAdvisor())
 
 		OverAllStateFactory stateFactory = () -> {
 			OverAllState state = new OverAllState();
 			state.registerKeyAndStrategy("input", new ReplaceStrategy());
+			state.registerKeyAndStrategy("interrupt", new ReplaceStrategy());
+			state.registerKeyAndStrategy("interrupt_tip", new ReplaceStrategy());
+			// 用于存储反馈信息 应使用短期记忆
 			state.registerKeyAndStrategy("feedback", new ReplaceStrategy());
-			state.registerKeyAndStrategy("observation", new AppendStrategy());
-			state.registerKeyAndStrategy("output", new AppendStrategy());
-			//state.registerKeyAndStrategy("chat_history", new ReplaceStrategy());
-			//state.registerKeyAndStrategy("memory", new ReplaceStrategy());
+			// 用于存储中间信息 相同信息应避免重复
+			state.registerKeyAndStrategy("observation", new ReplaceStrategy());
+			state.registerKeyAndStrategy("output", new ReplaceStrategy());
+			// state.registerKeyAndStrategy("chat_history", new ReplaceStrategy());
+			// state.registerKeyAndStrategy("memory", new ReplaceStrategy());
 			state.registerKeyAndStrategy("final_output", new ReplaceStrategy());
 			return state;
 		};
@@ -156,18 +161,20 @@ public class AppAgentWorkflowConfig {
 		StateGraph stateGraph = new StateGraph("Xuban Workflow", stateFactory)
 			// 负责获取全部信息
 			.addNode("node1", AsyncNodeAction.node_async(new XbNode1(chatClient)))
+			.addNode("human_feedback", AsyncNodeAction.node_async(new HumanFeedbackNode()))
 			// 负责按已有信息查询续班情况
 			.addNode("node2", AsyncNodeAction.node_async(new XbNode2(chatClient)))
 			// 结果处理
 			.addNode("finish", AsyncNodeAction.node_async(new FinishNode()))
 			.addConditionalEdges(START, AsyncEdgeAction.edge_async(new IntentionDispatcher()),
 					Map.of("valid", "node1", "invalid", "finish"))
-			.addEdge("node1", "node2")
+			.addConditionalEdges("node1", AsyncEdgeAction.edge_async(new XbNode1Dispatcher()),
+					Map.of("node2", "node2", "human_feedback", "human_feedback"))
+			.addEdge("human_feedback", "node1")
 			.addEdge("node2", "finish")
 			.addEdge("finish", END);
 
-		GraphRepresentation graphRepresentation = stateGraph.getGraph(GraphRepresentation.Type.MERMAID,
-				"续班workflow");
+		GraphRepresentation graphRepresentation = stateGraph.getGraph(GraphRepresentation.Type.MERMAID, "续班workflow");
 		log.info("\n\n");
 		log.info(graphRepresentation.content());
 		log.info("\n\n");

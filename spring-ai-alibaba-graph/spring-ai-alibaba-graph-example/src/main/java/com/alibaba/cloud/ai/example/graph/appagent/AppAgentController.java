@@ -152,12 +152,13 @@ public class AppAgentController {
 			// 重启工作流
 			AsyncGenerator<NodeOutput> resultFuture = compiledGraph.streamFromInitialNode(state, runnableConfig);
 			processStream(resultFuture, sink);
-		} else {
+		}
+		else {
 			// 初始问题, 首次启动工作流
 			// 构建可恢复的工作流 设定某节点需要人类的反馈信息
 			SaverConfig saverConfig = SaverConfig.builder().register(SaverConstant.MEMORY, new MemorySaver()).build();
 			compiledGraph = appAgentWorkflowConfig.xubanFlow()
-				.compile(CompileConfig.builder().saverConfig(saverConfig).build());//.interruptBefore("node2")
+				.compile(CompileConfig.builder().saverConfig(saverConfig).build());// .interruptBefore("node2")
 
 			initParams(chatRequest, objectMap);
 			logger.info("chatXuban, init inputs: {}", objectMap);

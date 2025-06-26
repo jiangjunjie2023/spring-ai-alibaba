@@ -42,8 +42,11 @@ public class Node1 implements NodeAction {
 
 		Map<String, Object> updated = new HashMap<>();
 		updated.put("output", output);
-		Integer classCnt = RandomUtils.nextInt(1, 5);
-		updated.put("classCnt", classCnt);
+		int classCnt = RandomUtils.nextInt(1, 5);
+		boolean interrupt = classCnt > 1;
+		updated.put("interrupt", interrupt);
+		logger.info("Node1 interrupt = {}", interrupt);
+
 		logger.info("Node1, 返回的updated: {}", updated);
 		return updated;
 	}

@@ -42,10 +42,14 @@ public class XbNode2 implements NodeAction {
 		logger.info("Node2, state: {}", state.data());
 		String input = (String) state.value("input").orElse("");
 		logger.info("Node2, input: {}", input);
-		String observation = (String) state.value("observation").orElse("");
+		String output = (String) state.value("output").orElse("");
+		logger.info("Node2, output: {}", output);
+		// List observationList = state.value("observation", List.class).orElse(new
+		// ArrayList<>());
+		String observation = state.value("observation").orElse("").toString();
 		logger.info("Node2, observation: {}", observation);
 
-		ActionNode.AgentResponse response = new Gson().fromJson(observation, ActionNode.AgentResponse.class);
+		ActionNode.AgentResponse response = new Gson().fromJson(output, ActionNode.AgentResponse.class);
 		if (response == null || StringUtils.isEmpty(response.getAction())
 				|| !response.getAction().equals("xuban_check")) {
 			logger.warn("未识别的结果，直接返回");
@@ -64,6 +68,7 @@ public class XbNode2 implements NodeAction {
 		String result = XubanCheckTool.xubanCheck(teacherCode, schoolId.intValue(), classCode);
 
 		String prompt = systemPromptTemplate.render(Map.of("task", input, "data", result));
+		logger.info("Node2, prompt: {}", prompt);
 
 		result = chatClient.prompt().user(prompt).call().content();
 		logger.info("Node2, result: {}", result);

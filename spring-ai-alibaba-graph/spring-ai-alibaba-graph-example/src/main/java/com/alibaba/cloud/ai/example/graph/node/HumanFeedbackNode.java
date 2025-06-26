@@ -38,39 +38,42 @@ public class HumanFeedbackNode implements NodeAction {
 	@Override
 	public Map<String, Object> apply(OverAllState state) throws GraphInterruptException {
 		logger.info("HumanFeedbackNode, 收到的完整state: {}", state.data());
-		String nextStep = "finish";
+		boolean interrupt = (Boolean) state.value("interrupt").orElse(false);
+		logger.info("HumanFeedbackNode, interrupt: {}", interrupt);
+		String interruptTip = (String) state.value("interrupt_tip").orElse("interrupt");
+		logger.info("HumanFeedbackNode, interruptTip: {}", interruptTip);
 
 		Map<String, Object> updated = new HashMap<>();
 		// auto_accepted、yes、no 迭代次数都+1
-		updated.put("plan_iterations", getPlanIterations(state) + 1);
+		// updated.put("plan_iterations", getPlanIterations(state) + 1);
 
-		boolean needChooseClass = state.value("classCnt", 0) > 1;
-		logger.info("HumanFeedbackNode needChooseClass = {}", needChooseClass);
-		if (needChooseClass) {
-			// 需要反馈 且 未拿到反馈时 中断
-			interrupt(state);
-
-			Map<String, Object> feedBackData = state.humanFeedback().data();
-			String feedback = feedBackData.getOrDefault("feedback", "A").toString();
-			logger.info("Human feedback content: {}", feedback);
-
-			if (!StringUtils.isEmpty(feedback)) {
-				nextStep = "node2";
-				String output = updated.getOrDefault("output", "") + ", " + feedback;
-				updated.put("output", output);
-				// 重置为非恢复状态
-				state.withoutResume();
+		// 需要反馈 且 未拿到反馈时 中断
+		// 只有首次执行且没有人工反馈时才中断
+		if (interrupt) {
+			if (!state.isResume()) {// && state.humanFeedback() == null
+				throw new GraphInterruptException(interruptTip);
+			}
+			else {
+				updated.put("interrupt", false);
+				updated.put("interrupt_tip", "");
 			}
 		}
-		updated.put("human_next_node", nextStep);
-		logger.info("HumanFeedbackNode -> {} node", nextStep);
+		// 重置为非恢复状态
+		state.withoutResume();
+		Map<String, Object> feedBackData = state.humanFeedback().data();
+		String feedback = feedBackData.getOrDefault("feedback", "").toString();
+		logger.info("HumanFeedbackNode, feedback: {}", feedback);
+		if (!StringUtils.isEmpty(feedback)) {
+			updated.put("feedback", feedback);
+		}
+		logger.info("HumanFeedbackNode, updated: {}", updated);
 		return updated;
 	}
 
-	private void interrupt(OverAllState state) throws GraphInterruptException {
+	private void interrupt(OverAllState state, String interruptTip) throws GraphInterruptException {
 		// 只有首次执行且没有人工反馈时才中断
 		if (!state.isResume() && state.humanFeedback() == null) {
-			throw new GraphInterruptException("interrupt");
+			throw new GraphInterruptException(interruptTip);
 		}
 	}
 
